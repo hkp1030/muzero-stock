@@ -213,7 +213,7 @@ class TradingStock:
 
         self.agent = Agent(environment=environment, min_trading_unit=min_trading_unit, max_trading_unit=max_trading_unit)
 
-        observation = self.agent.environment.training_data.iloc[0]
+        observation = self.agent.environment.training_data.iloc[0].tolist()
         observation.extend(self.agent.get_states())
 
         return observation
@@ -222,6 +222,7 @@ class TradingStock:
         reward = self.agent.act(action, confidence)
 
         observation, done = self.agent.environment.observe()
+        observation = observation.tolist()
         observation.extend(self.agent.get_states())
 
         return observation, reward, done
