@@ -6,7 +6,10 @@ import numpy
 import torch
 
 from .abstract_game import AbstractGame
-from stock import agent
+
+from stock.agent import Agent
+from stock import data_manager
+from stock.environment import Environment
 
 
 class MuZeroConfig:
@@ -17,8 +20,9 @@ class MuZeroConfig:
         self.max_num_gpus = 1  # Fix the maximum number of GPUs to use. It's usually faster to use a single GPU (set it to 1) if it has enough memory. None will use every GPUs available
 
         ### Game
-        self.observation_shape = (1, 1, 4)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
-        self.action_space = list(range(2))  # Fixed list of all possible actions. You should only edit the length
+        chart_length = len(data_manager.COLUMNS_TRAINING_DATA_V2)
+        self.observation_shape = (1, 1, chart_length+3)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
+        self.action_space = list(range(3))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 0  # Number of previous observations and previous actions to add to the current observation
 
@@ -121,7 +125,7 @@ class Game(AbstractGame):
     """
 
     def __init__(self, seed=None):
-        self.env = agent()
+        self.env = TradingStock()
 
     def step(self, action):
         """
@@ -133,7 +137,7 @@ class Game(AbstractGame):
         Returns:
             The new observation, the reward and a boolean if the game has ended.
         """
-        observation, reward, done, _ = self.env.step(action)
+        observation, reward, done = self.env.step(action)
         return numpy.array([[observation]]), reward, done
 
     def legal_actions(self):
@@ -147,7 +151,7 @@ class Game(AbstractGame):
         Returns:
             An array of integers, subset of the action space.
         """
-        return list(range(2))
+        return self.env.legal_actions()
 
     def reset(self):
         """
@@ -182,7 +186,53 @@ class Game(AbstractGame):
             String representing the action.
         """
         actions = {
-            0: "Push cart to the left",
-            1: "Push cart to the right",
+            0: "매수",
+            1: "매도",
+            2: "홀딩",
         }
         return f"{action_number}. {actions[action_number]}"
+
+
+class TradingStock:
+    def __init__(self):
+        chart_data, training_data = data_manager.load_data('005380', '20190101', '20191231')
+
+        min_trading_unit = max(int(100000 / chart_data.iloc[-1]['close']), 1)
+        max_trading_unit = max(int(1000000 / chart_data.iloc[-1]['close']), 1)
+
+        environment = Environment(chart_data, training_data)
+
+        self.agent = Agent(environment=environment, min_trading_unit=min_trading_unit, max_trading_unit=max_trading_unit)
+
+    def reset(self):
+        chart_data, training_data = data_manager.load_data('005380', '20190101', '20191231')
+
+        min_trading_unit = max(int(100000 / chart_data.iloc[-1]['close']), 1)
+        max_trading_unit = max(int(1000000 / chart_data.iloc[-1]['close']), 1)
+
+        environment = Environment(chart_data, training_data)
+
+        self.agent = Agent(environment=environment, min_trading_unit=min_trading_unit, max_trading_unit=max_trading_unit)
+
+        observation = self.agent.environment.training_data.iloc[0]
+        observation.extend(self.agent.get_states())
+
+        return observation
+
+    def step(self, action, confidence):
+        reward = self.agent.act(action, confidence)
+
+        observation, done = self.agent.environment.observe()
+        observation.extend(self.agent.get_states())
+
+        return observation, reward, done
+
+    def legal_actions(self):
+        return [action for action in self.agent.ACTIONS if self.agent.validate_action(action)]
+
+    def render(self):
+        print('포트폴리오 가치 :', self.agent.portfolio_value)
+        print('주가 :', self.agent.environment.get_price())
+
+    def close(self):
+        print('최종 포트폴리오 가치 :', self.agent.portfolio_value)
