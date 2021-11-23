@@ -136,7 +136,7 @@ class Game(AbstractGame):
         Returns:
             The new observation, the reward and a boolean if the game has ended.
         """
-        observation, reward, done = self.env.step(action)
+        observation, reward, done = self.env.step(action, 1)
         return numpy.array([[observation]]), reward, done
 
     def legal_actions(self):

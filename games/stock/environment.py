@@ -4,12 +4,12 @@ class Environment:
     def __init__(self, chart_data=None, training_data=None):
         self.chart_data = chart_data
         self.training_data = training_data
-        self.observation = None
+        self.observation = self.training_data.iloc[0]
         self.idx = 0
         self.done = False
 
     def reset(self):
-        self.observation = None
+        self.observation = self.training_data.iloc[0]
         self.idx = 0
         self.done = False
 
@@ -26,6 +26,4 @@ class Environment:
         return self.observation, self.done
 
     def get_price(self):
-        if self.observation is not None:
-            return self.observation[self.PRICE_IDX]
-        return None
+        return self.chart_data.iloc[self.idx][self.PRICE_IDX]

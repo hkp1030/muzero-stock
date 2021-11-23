@@ -38,8 +38,8 @@ class Agent:
         self.balance = balance  # 현재 현금 잔고
         self.num_stocks = 0  # 보유 주식 수
         # 포트폴리오 가치: balance + num_stocks * {현재 주식 가격}
-        self.portfolio_value = 0 
-        self.base_portfolio_value = 0  # 직전 학습 시점의 PV
+        self.portfolio_value = self.initial_balance
+        self.base_portfolio_value = self.initial_balance  # 직전 학습 시점의 PV
         self.num_buy = 0  # 매수 횟수
         self.num_sell = 0  # 매도 횟수
         self.num_hold = 0  # 홀딩 횟수
