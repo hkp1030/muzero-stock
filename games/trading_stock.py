@@ -16,7 +16,7 @@ class MuZeroConfig:
         # More information is available here: https://github.com/werner-duvaud/muzero-general/wiki/Hyperparameter-Optimization
 
         self.seed = 0  # Seed for numpy, torch and the game
-        self.max_num_gpus = 1  # Fix the maximum number of GPUs to use. It's usually faster to use a single GPU (set it to 1) if it has enough memory. None will use every GPUs available
+        self.max_num_gpus = None  # Fix the maximum number of GPUs to use. It's usually faster to use a single GPU (set it to 1) if it has enough memory. None will use every GPUs available
 
         ### Game
         chart_length = len(data_manager.COLUMNS_TRAINING_DATA_V2)
@@ -31,7 +31,7 @@ class MuZeroConfig:
 
         ### Self-Play
         self.num_workers = 1  # Number of simultaneous threads/workers self-playing to feed the replay buffer
-        self.selfplay_on_gpu = True
+        self.selfplay_on_gpu = False
         self.max_moves = 500  # Maximum number of moves if game is not finished before
         self.num_simulations = 50  # Number of future moves self-simulated
         self.discount = 0.997  # Chronological discount of the reward
@@ -71,11 +71,11 @@ class MuZeroConfig:
         ### Training
         self.results_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../results", os.path.basename(__file__)[:-3], datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S"))  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
-        self.training_steps = 1000  # Total number of training steps (ie weights update according to a batch)
+        self.training_steps = 30000  # Total number of training steps (ie weights update according to a batch)
         self.batch_size = 128  # Number of parts of games to train on at each training step
         self.checkpoint_interval = 10  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 1  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
-        self.train_on_gpu = True  # Train on GPU if available
+        self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
 
         self.optimizer = "Adam"  # "Adam" or "SGD". Paper uses SGD
         self.weight_decay = 1e-4  # L2 weights regularization
@@ -95,7 +95,7 @@ class MuZeroConfig:
 
         # Reanalyze (See paper appendix Reanalyse)
         self.use_last_model_value = True  # Use the last model to provide a fresher, stable n-step value (See paper appendix Reanalyze)
-        self.reanalyse_on_gpu = True
+        self.reanalyse_on_gpu = False
 
         ### Adjust the self play / training ratio to avoid over/underfitting
         self.self_play_delay = 0  # Number of seconds to wait after each played game
@@ -187,43 +187,36 @@ class Game(AbstractGame):
         actions = {
             0: "매수",
             1: "매도",
-            2: "홀딩",
+            2: "관망",
         }
         return f"{action_number}. {actions[action_number]}"
 
 
 class TradingStock:
     def __init__(self):
-        chart_data, training_data = data_manager.load_data('005380', '20190101', '20191231')
-
-        min_trading_unit = max(int(100000 / chart_data.iloc[-1]['close']), 1)
-        max_trading_unit = max(int(1000000 / chart_data.iloc[-1]['close']), 1)
-
-        environment = Environment(chart_data, training_data)
-
-        self.agent = Agent(environment=environment, min_trading_unit=min_trading_unit, max_trading_unit=max_trading_unit)
+        self.reset()
 
     def reset(self):
         chart_data, training_data = data_manager.load_data('005380', '20190101', '20191231')
 
-        min_trading_unit = max(int(100000 / chart_data.iloc[-1]['close']), 1)
-        max_trading_unit = max(int(1000000 / chart_data.iloc[-1]['close']), 1)
+        initial_balance = 100000000
+        min_trading_price = 100000
+        max_trading_price = 10000000
 
         environment = Environment(chart_data, training_data)
 
-        self.agent = Agent(environment=environment, min_trading_unit=min_trading_unit, max_trading_unit=max_trading_unit)
+        self.agent = Agent(environment, initial_balance, min_trading_price, max_trading_price)
 
-        observation = self.agent.environment.training_data.iloc[0].tolist()
-        observation.extend(self.agent.get_states())
+        observation = self.agent.build_sample()
 
         return observation
 
     def step(self, action, confidence):
         reward = self.agent.act(action, confidence)
-
-        observation, done = self.agent.environment.observe()
-        observation = observation.tolist()
-        observation.extend(self.agent.get_states())
+        observation = self.agent.build_sample()
+        if observation is None:
+            raise AttributeError()
+        done = self.agent.environment.is_done()
 
         return observation, reward, done
 

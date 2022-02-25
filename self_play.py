@@ -167,10 +167,10 @@ class SelfPlay:
                         opponent, stacked_observations
                     )
 
-                confidence = torch.softmax(
-                    torch.tensor(root.children.values()), dim=0
-                ).tolist()[action]
-                observation, reward, done = self.game.step(action, confidence)
+                # confidence = torch.softmax(
+                #     torch.tensor(root.children.values()), dim=0
+                # ).tolist()[action]
+                observation, reward, done = self.game.step(action)
 
                 if render:
                     print(f"Played action: {self.game.action_to_string(action)}")
